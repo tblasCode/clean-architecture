@@ -1,0 +1,118 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mdw-template-bsn
+  output.ansi.enabled: ALWAYS
+  profiles:
+    group.local: h2, actuator, nosecurity
+    group.dev: postgresql, vault, keycloak, actuator, zipkin
+    group.qa: postgresql, vault, keycloak, actuator, zipkin
+    group.pro: postgresql, vault, keycloak, zipkin
+
+---
+spring.config.activate.on-profile: local
+
+app.kafka.topic.retention: 7d
+app.kafka.deadletter.retention: 28d
+app.kafka.deadletter.suffix: -DLT
+
+# Intentionally low values so tests can not get stuck retrying
+app.kafka.backoff.initial-interval: 500ms
+app.kafka.backoff.max-interval: 2s
+app.kafka.backoff.max-retries: 4
+app.kafka.backoff.multiplier: 1.5
+
+server:
+  port: 8084
+
+spring:
+  kafka:
+    consumer:
+      properties:
+        spring.json.trusted.packages: "com.vass.middleware.microservicies.adapter.kafka.model"
+      bootstrap-servers: localhost:9092
+      group-id: group-id
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    producer:
+      client-id: avro-client-id
+      bootstrap-servers: localhost:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  cloud:
+    vault:
+      enabled: false
+      authentication: NONE
+  datasource:
+    url: jdbc:h2:mem:profileCrypto;MODE=MSSQLServer;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;INIT=CREATE SCHEMA IF NOT EXISTS template
+
+resilience4j.retry:
+  configs:
+    default:
+      maxAttempts: 3
+      waitDuration: 100
+      retryExceptions:
+      - org.springframework.web.client.HttpServerErrorException
+      - java.util.concurrent.TimeoutException
+      - java.io.IOException
+      ignoreExceptions:
+      - com.vass.middleware.architecture.rest.api.FrameworkBusinessException
+  instances:
+    backendA:
+      baseConfig: default
+    backendB:
+      baseConfig: default
+
+logging:
+  level:
+    org.springframework: INFO
+    com.vass.middleware.microservicies: INFO
+
+framework:
+  common:
+    logging:
+      console:
+        encoder: plain
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+---
+spring.config.activate.on-profile: dev
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+spring:
+  flyway:
+    table: "flyway_mdw_template_history"
+    baseline-on-migrate: true
+    baseline-version: 0
+  datasource:
+    hikari:
+      schema: template
+---
+spring.config.activate.on-profile: qa
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+---
+spring.config.activate.on-profile: pro
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: ERROR
