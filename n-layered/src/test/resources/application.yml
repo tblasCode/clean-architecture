@@ -1,0 +1,16 @@
+spring:
+  profiles:
+      active: nosecurity
+  application:
+    name: mdw-template-bsn
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuerUri: http://localhost:8080/realms/master
+          jwkSetUri: http://localhost:8080/realms/master/protocol/openid-connect/certs
+  cloud:
+    vault:
+      enabled: false
+      authentication: NONE
+      token: 00000000-0000-0000-0000-000000000000
