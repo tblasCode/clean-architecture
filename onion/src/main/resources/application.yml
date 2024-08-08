@@ -1,0 +1,94 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mdw-template-bsn
+  output.ansi.enabled: ALWAYS
+  profiles:
+    group.local: h2, actuator, nosecurity
+    group.dev: postgresql, vault, keycloak, actuator, zipkin
+    group.qa: postgresql, vault, keycloak, actuator, zipkin
+    group.pro: postgresql, vault, keycloak, zipkin
+
+---
+spring.config.activate.on-profile: local
+
+server:
+  port: 8084
+
+spring:
+  cloud:
+    vault:
+      enabled: false
+      authentication: NONE
+  datasource:
+    url: jdbc:h2:mem:profileCrypto;MODE=MSSQLServer;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;INIT=CREATE SCHEMA IF NOT EXISTS template
+
+resilience4j.retry:
+  configs:
+    default:
+      maxAttempts: 3
+      waitDuration: 100
+      retryExceptions:
+      - org.springframework.web.client.HttpServerErrorException
+      - java.util.concurrent.TimeoutException
+      - java.io.IOException
+      ignoreExceptions:
+      - com.vass.middleware.architecture.rest.api.FrameworkBusinessException
+  instances:
+    backendA:
+      baseConfig: default
+    backendB:
+      baseConfig: default
+
+logging:
+  level:
+    org.springframework: INFO
+    com.vass.middleware.microservicies: INFO
+
+framework:
+  common:
+    logging:
+      console:
+        encoder: plain
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+---
+spring.config.activate.on-profile: dev
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+spring:
+  flyway:
+    table: "flyway_mdw_template_history"
+    baseline-on-migrate: true
+    baseline-version: 0
+  datasource:
+    hikari:
+      schema: template
+---
+spring.config.activate.on-profile: qa
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: INFO
+
+---
+spring.config.activate.on-profile: pro
+framework:
+  common:
+    logging:
+      console:
+        encoder: json
+        pattern: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+      level: ERROR
